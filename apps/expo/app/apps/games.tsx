@@ -26,10 +26,8 @@ import {
 	Input,
 	ScrollView,
 	Spacer,
-	Dialog,
 	Sheet,
 	ListItem,
-	H5,
 } from 'tamagui';
 import {
 	Search,
@@ -61,10 +59,24 @@ import {
 } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as configcat from 'configcat-js';
+import { useRouter } from 'expo-router';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SWIPE_THRESHOLD = 120;
 const CARD_ASPECT_RATIO = 1.5;
+const PRELOADED_GAMES = [
+	{
+		id: 1,
+		title: 'GBADoom',
+		image: 'https://files.catbox.moe/b57k9g.jpg',
+		rating: '4.7',
+		description: "An iconic shoot em' up!",
+		genre: 'Action',
+		platform: 'emujs',
+		core: 'gba',
+		url: 'https://files.catbox.moe/1jywfw.gba',
+	},
+];
 
 const NonSwipableGameCard = ({ game, onPress }) => (
 	<TouchableOpacity style={styles.gameCard} onPress={() => onPress(game)}>
@@ -73,6 +85,12 @@ const NonSwipableGameCard = ({ game, onPress }) => (
 			<H4 numberOfLines={1} style={styles.gameTitle}>
 				{game.title}
 			</H4>
+			<Paragraph numberOfLines={1}>{game.genre}</Paragraph>
+			{game.author ? (
+				<Paragraph numberOfLines={1}>{game.author}</Paragraph>
+			) : (
+				<></>
+			)}
 			<XStack gap="$2" marginTop="$2">
 				<Star size={16} color="#FFD700" />
 				<Paragraph size="$2" style={styles.gameRating}>
@@ -109,6 +127,7 @@ const FeaturedGameCard = ({ game, onPress }) => (
 				<Button
 					icon={<Play size={20} color="#FFFFFF" />}
 					style={styles.featuredGameButton}
+					color={'white'}
 					onPress={() => onPress(game)}>
 					Play Now
 				</Button>
@@ -179,7 +198,9 @@ const CategoryButton = ({ icon, label, isSelected, onPress }) => (
 		style={[styles.categoryButton, isSelected && styles.categoryButtonSelected]}
 		onPress={onPress}>
 		{icon}
-		<Paragraph style={[{ color: isSelected ? 'white' : '#6D6D6D' }]}>
+		<Paragraph
+			style={[{ color: isSelected ? 'white' : 'black' }]}
+			paddingLeft={4}>
 			{label}
 		</Paragraph>
 	</TouchableOpacity>
@@ -203,14 +224,6 @@ const SwipeableGamesLibrary = (toggleSwipeable) => {
 	useEffect(() => {
 		loadGameUrls();
 	}, []);
-
-	useEffect(() => {
-		fetchGames();
-	}, [gameUrls]);
-
-	useEffect(() => {
-		setFilteredGames(games);
-	}, [games]);
 
 	const panResponders = PanResponder.create({
 		onMoveShouldSetPanResponder: () => true,
@@ -282,24 +295,6 @@ const SwipeableGamesLibrary = (toggleSwipeable) => {
 		}
 	};
 
-	const fetchGames = async () => {
-		try {
-			let allGames = [];
-			for (const url of gameUrls) {
-				const response = await fetch(url);
-				if (!response.ok) {
-					throw new Error(`HTTP error! status: ${response.status}`);
-				}
-				const data = await response.json();
-				allGames = [...allGames, ...data];
-			}
-			setGames(allGames);
-		} catch (error) {
-			console.error('Error fetching games:', error);
-			Alert.alert('Error', 'Failed to fetch games. Please try again later.');
-		}
-	};
-
 	const handleAddGameUrl = async () => {
 		if (newGameUrl) {
 			setIsSubmitting(true);
@@ -337,6 +332,8 @@ const SwipeableGamesLibrary = (toggleSwipeable) => {
 			router.navigate(`/(media)/(gamesproviders)/coolmathgames/${game.id}`);
 		} else if (game.platform === 'web') {
 			router.navigate(`/(media)/(gamesproviders)/web/${game.id}`);
+		} else if (game.platform === 'emujs') {
+			router.navigate(`/(media)/(gamesproviders)/emujs/${game.id}`);
 		}
 	};
 
@@ -405,11 +402,11 @@ const SwipeableGamesLibrary = (toggleSwipeable) => {
 
 			<Sheet
 				forceRemoveScrollEnabled={isAddUrlModalOpen}
-				snapPointsMode={'percent'}
+				snapPointsMode={'mixed'}
 				modal={true}
 				open={isAddUrlModalOpen}
 				onOpenChange={setIsAddUrlModalOpen}
-				snapPoints={[40]}
+				snapPoints={['80%', 256, 190]}
 				dismissOnSnapToBottom
 				position={0}
 				animation="medium">
@@ -491,7 +488,6 @@ const GameLibrary = (toggleSwipeable) => {
 	const [featuredGame, setFeaturedGame] = useState(null);
 	const [selectedCategory, setSelectedCategory] = useState('All');
 	const [searchQuery, setSearchQuery] = useState('');
-	const [refreshing, setRefreshing] = useState(false);
 	const [gameUrls, setGameUrls] = useState([]);
 	const [newGameUrl, setNewGameUrl] = useState('');
 	const [isAddUrlModalOpen, setIsAddUrlModalOpen] = useState(false);
@@ -502,12 +498,12 @@ const GameLibrary = (toggleSwipeable) => {
 	const modalScale = useSharedValue(0.8);
 
 	useEffect(() => {
-		loadGameUrls();
+		loadSources();
 	}, []);
 
 	useEffect(() => {
 		fetchGames();
-	}, [gameUrls]);
+	}, []);
 
 	useEffect(() => {
 		const configCatClient = configcat.getClient(
@@ -522,14 +518,36 @@ const GameLibrary = (toggleSwipeable) => {
 			setSwipeableModeEnabled(value);
 		});
 	}, []);
-	const loadGameUrls = async () => {
+
+	const loadSources = async () => {
 		try {
-			const storedUrls = await AsyncStorage.getItem('gameUrls');
-			if (storedUrls !== null) {
-				setGameUrls(JSON.parse(storedUrls));
+			const sources = await AsyncStorage.getItem('gameUrls');
+			if (sources) {
+				setGameUrls(JSON.parse(sources));
 			}
 		} catch (error) {
-			console.error('Error loading game URLs:', error);
+			Alert.alert('Error', 'Failed to load game sources');
+		}
+	};
+
+	const fetchGames = async () => {
+		try {
+			const gamesData = await Promise.all(
+				gameUrls.map(async (url) => {
+					const response = await fetch(url);
+					if (!response.ok) return [];
+					return response.json();
+				}),
+			);
+
+			setGames([gamesData.flat(), PRELOADED_GAMES].flat());
+			console.log(gamesData.flat());
+			console.log(PRELOADED_GAMES);
+			setFeaturedGame(
+				gamesData.flat()[Math.floor(Math.random() * gamesData.flat().length)],
+			);
+		} catch (error) {
+			Alert.alert('Error', 'Failed to fetch games');
 		}
 	};
 
@@ -538,25 +556,6 @@ const GameLibrary = (toggleSwipeable) => {
 			await AsyncStorage.setItem('gameUrls', JSON.stringify(urls));
 		} catch (error) {
 			console.error('Error saving game URLs:', error);
-		}
-	};
-
-	const fetchGames = async () => {
-		try {
-			let allGames = [];
-			for (const url of gameUrls) {
-				const response = await fetch(url);
-				if (!response.ok) {
-					throw new Error(`HTTP error! status: ${response.status}`);
-				}
-				const data = await response.json();
-				allGames = [...allGames, ...data];
-			}
-			setGames(allGames);
-			setFeaturedGame(allGames[Math.floor(Math.random() * allGames.length)]);
-		} catch (error) {
-			console.error('Error fetching games:', error);
-			Alert.alert('Error', 'Failed to fetch games. Please try again later.');
 		}
 	};
 
@@ -620,9 +619,13 @@ const GameLibrary = (toggleSwipeable) => {
 
 	const handlePlayGame = (game) => {
 		if (game.platform === 'coolmathgames') {
-			router.navigate(`/(media)/(gamesproviders)/coolmathgames/${game.id}`);
+			router.push(`/(media)/(gamesproviders)/coolmathgames/${game.id}`);
 		} else if (game.platform === 'web') {
-			router.navigate(`/(media)/(gamesproviders)/web/${game.id}`);
+			router.push(`/(media)/(gamesproviders)/web/${game.id}`);
+		} else if (game.platform === 'emujs') {
+			router.push(
+				`/(media)/(gamesproviders)/emujs/${game.id}?url=${game.url}&core=${game.core}`,
+			);
 		}
 	};
 
@@ -696,7 +699,7 @@ const GameLibrary = (toggleSwipeable) => {
 								icon={
 									<Zap
 										size={20}
-										color={selectedCategory === 'Action' ? 'white' : '#FFD700'}
+										color={selectedCategory === 'Action' ? 'white' : 'orange'}
 									/>
 								}
 								label="Action"
@@ -731,11 +734,9 @@ const GameLibrary = (toggleSwipeable) => {
 							/>
 						</XStack>
 					</ScrollView>
-					<H3 style={styles.sectionTitle}>Featured Game</H3>
 					{featuredGame && (
 						<FeaturedGameCard game={featuredGame} onPress={handleGamePress} />
 					)}
-					<H3 style={styles.sectionTitle}>All Games</H3>
 					<FlatList
 						data={filteredGames}
 						renderItem={({ item }) => (
@@ -815,6 +816,11 @@ const GameLibrary = (toggleSwipeable) => {
 							/>
 							<YStack gap="$4" padding="$4">
 								<H3>{expandedGame.title}</H3>
+								{expandedGame.author ? (
+									<Paragraph numberOfLines={1}>{game.author}</Paragraph>
+								) : (
+									<></>
+								)}
 								<Paragraph>{expandedGame.description}</Paragraph>
 								<XStack gap="$4">
 									<XStack alignItems="center" gap="$2">
@@ -824,7 +830,7 @@ const GameLibrary = (toggleSwipeable) => {
 									{expandedGame.nsfw === 'true' && (
 										<XStack alignItems="center" gap="$2">
 											<AlertOctagon size={16} color="#c41700" />
-											<Paragraph>18+</Paragraph>
+											<Paragraph>NSFW</Paragraph>
 										</XStack>
 									)}
 								</XStack>
@@ -879,12 +885,6 @@ const styles = StyleSheet.create({
 		fontSize: 28,
 		fontWeight: '700',
 	},
-	sectionTitle: {
-		color: '#333333',
-		marginVertical: 10,
-		fontSize: 22,
-		fontWeight: '600',
-	},
 	categoryContainer: {
 		marginVertical: 10,
 	},
@@ -897,7 +897,7 @@ const styles = StyleSheet.create({
 		backgroundColor: '#EAEAEA',
 	},
 	categoryButtonSelected: {
-		backgroundColor: '#4CAF50',
+		backgroundColor: '#38a0f5',
 	},
 	gameCard: {
 		width: SCREEN_WIDTH * 0.28,
@@ -968,7 +968,7 @@ const styles = StyleSheet.create({
 		fontSize: 14,
 	},
 	featuredGameButton: {
-		backgroundColor: '#4CAF50',
+		backgroundColor: '#38a0f5',
 		paddingHorizontal: 20,
 		paddingVertical: 10,
 		borderRadius: 25,
@@ -1000,7 +1000,8 @@ const styles = StyleSheet.create({
 		borderTopRightRadius: 20,
 	},
 	playButton: {
-		backgroundColor: '#4CAF50',
+		backgroundColor: '#38a0f5',
+		color: '#FFFFFF',
 		borderRadius: 20,
 	},
 	urlInput: {

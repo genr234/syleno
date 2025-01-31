@@ -33,7 +33,6 @@ const styles = StyleSheet.create({
 	iframe: {
 		width: '100%',
 		height: '100%',
-		border: 'none',
 	},
 	orientationMessage: {
 		position: 'absolute',
@@ -67,14 +66,13 @@ const styles = StyleSheet.create({
 });
 
 export default function WebGame() {
-	const params = useLocalSearchParams();
 	const [orientation, setOrientation] = useState(getOrientation());
-	const [url, setUrl] = useState('');
 	const [dimensions, setDimensions] = useState(Dimensions.get('window'));
 	const [backDialogOpen, setBackDialogOpen] = useState(false);
 	const [isButtonPressed, setIsButtonPressed] = useState(false);
 	const router = useRouter();
 	const webViewRef = useRef(null);
+	const { core, url } = useLocalSearchParams();
 
 	// Animation and gesture state
 	const pan = useRef(new Animated.ValueXY()).current;
@@ -86,9 +84,7 @@ export default function WebGame() {
 		PanResponder.create({
 			onStartShouldSetPanResponder: () => true,
 			onMoveShouldSetPanResponder: (_, gestureState) => {
-				const distance = Math.sqrt(
-					Math.pow(gestureState.dx, 2) + Math.pow(gestureState.dy, 2),
-				);
+				const distance = Math.sqrt(gestureState.dx ** 2 + gestureState.dy ** 2);
 				return distance > DRAG_THRESHOLD;
 			},
 			onPanResponderGrant: (event) => {
@@ -97,10 +93,6 @@ export default function WebGame() {
 					x: event.nativeEvent.locationX,
 					y: event.nativeEvent.locationY,
 				};
-				pan.setOffset({
-					x: pan.x._value,
-					y: pan.y._value,
-				});
 				setIsButtonPressed(true);
 			},
 			onPanResponderMove: (_, gestureState) => {
@@ -114,9 +106,7 @@ export default function WebGame() {
 				setIsButtonPressed(false);
 
 				const pressDuration = Date.now() - pressStartTime.current;
-				const distance = Math.sqrt(
-					Math.pow(gestureState.dx, 2) + Math.pow(gestureState.dy, 2),
-				);
+				const distance = Math.sqrt(gestureState.dx ** 2 + gestureState.dy ** 2);
 
 				if (distance < DRAG_THRESHOLD && pressDuration < LONG_PRESS_DURATION) {
 					setBackDialogOpen(true);
@@ -140,44 +130,7 @@ export default function WebGame() {
 		};
 
 		Dimensions.addEventListener('change', updateLayout);
-		fetchGameUrl();
 	}, []);
-
-	const fetchGameUrl = async () => {
-		try {
-			const storedUrls = await AsyncStorage.getItem('gameUrls');
-			if (storedUrls === null) {
-				throw new Error('No game sources found');
-			}
-
-			const gameUrls = JSON.parse(storedUrls);
-			let gameData = null;
-
-			for (const sourceUrl of gameUrls) {
-				try {
-					const response = await fetch(sourceUrl);
-					if (!response.ok) {
-						throw new Error(`HTTP error! status: ${response.status}`);
-					}
-					const data = await response.json();
-					gameData = data.find((game) => game.id === parseInt(params.id));
-					if (gameData) break;
-				} catch (error) {
-					console.error(`Error fetching from ${sourceUrl}:`, error);
-				}
-			}
-
-			if (gameData) {
-				setUrl(gameData.url);
-			} else {
-				throw new Error('Game not found in any source');
-			}
-		} catch (error) {
-			console.error('Error fetching game URL:', error);
-			Alert.alert('Error', 'Failed to load game data. Please try again later.');
-			router.navigate('/apps/games');
-		}
-	};
 
 	const handleBack = () => {
 		router.navigate('/apps/games');
@@ -208,6 +161,150 @@ export default function WebGame() {
 		}
 	};
 
+	const generateHtmlTemplate = (url: string, core: string) => `<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Syleno EmuJS Provider</title>
+    <link rel=icon href=docs/favicon.ico sizes="16x16 32x32 48x48 64x64" type=image/vnd.microsoft.icon>
+    <meta name=viewport content="width = device-width, initial-scale = 1">
+    <style>
+        body,
+        html {
+            height: 100%;
+            background-color: black;
+            color: white;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+
+        body,
+        #box,
+        #top {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+
+        #box {
+            color: #aaa;
+            height: 20em;
+            width: 30em;
+            max-width: 80%;
+            max-height: 80%;
+            background-color: #333;
+            border-radius: 0.4em;
+            border: 2px solid #555;
+            position: relative;
+            flex-direction: column;
+            transition-duration: 0.2s;
+            overflow: hidden;
+            font-family: monospace;
+            font-weight: bold;
+            font-size: 20px;
+            margin: 5px;
+        }
+
+        #box:hover,
+        #box[drag] {
+            border-color: #38f;
+            color: #ddd
+        }
+
+        #display {
+            width: 100%;
+            height: 100%
+        }
+
+        select,
+        button {
+            padding: 0.6em 0.4em;
+            margin: 0.5em;
+            width: 15em;
+            max-width: 100%;
+            font-family: monospace;
+            font-weight: bold;
+            font-size: 16px;
+            background-color: #444;
+            color: #aaa;
+            border-radius: 0.4em;
+            border: 1px solid #555;
+            cursor: pointer;
+            transition-duration: 0.2s
+        }
+
+        select:hover,
+        button:hover {
+            background-color: #666;
+            color: #ddd
+        }
+
+
+        #top {
+            margin: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <script>
+        let enableDebug = true;
+        let enableThreads = false;
+
+            const div = document.createElement("div")
+            const sub = document.createElement("div")
+            const script = document.createElement("script")
+
+            sub.id = "game"
+            div.id = "display"
+
+            div.appendChild(sub)
+            document.body.appendChild(div)
+
+            window.EJS_player = "#game";
+            window.EJS_gameName = "";
+            window.EJS_biosUrl = "";
+            window.EJS_gameUrl = "${url}";
+            window.EJS_core = "${core}";
+            window.EJS_pathtodata = "https://cdn.emulatorjs.org/stable/data/";
+            window.EJS_startOnLoaded = true;
+            window.EJS_DEBUG_XX = enableDebug;
+            window.EJS_disableDatabases = true;
+            window.EJS_threads = enableThreads;
+			EJS_cacheLimit = 2147483648;
+        EJS_Buttons = {
+            playPause: false,
+            restart: false,
+            mute: false,
+            settings: false,
+            fullscreen: true,
+            saveState: false,
+            loadState: false,
+            screenRecord: false,
+            gamepad: false,
+            cheat: false,
+            volume: false,
+            saveSavFiles: false,
+            loadSavFiles: false,
+            quickSave: true,
+            quickLoad: true,
+            screenshot: false,
+            cacheManager: false,
+            exitEmulation: false
+        };
+
+            script.src = "https://cdn.emulatorjs.org/stable/data/loader.js";
+            document.body.appendChild(script);
+
+    </script>
+</body>
+
+</html>`;
+
 	const renderContent = () => {
 		if (orientation === 'portrait') {
 			return (
@@ -227,7 +324,7 @@ export default function WebGame() {
 		if (Platform.OS === 'web') {
 			return (
 				<iframe
-					src={url}
+					srcDoc={generateHtmlTemplate(url, core)}
 					title="Game iframe"
 					allowFullScreen
 					style={styles.iframe}
@@ -238,7 +335,9 @@ export default function WebGame() {
 		return (
 			<WebView
 				ref={webViewRef}
-				source={{ uri: url }}
+				source={{
+					html: generateHtmlTemplate(url, core),
+				}}
 				style={styles.iframe}
 				allowsFullscreenVideo
 				javaScriptEnabled

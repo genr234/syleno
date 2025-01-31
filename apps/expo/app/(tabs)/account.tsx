@@ -1,8 +1,14 @@
 import { SignedIn, SignedOut, useAuth, useUser } from '@clerk/clerk-expo';
-import { Gift, LogOut, SmilePlus, Verified } from '@tamagui/lucide-icons';
+import {
+	Gift,
+	LogOut,
+	Smile,
+	SmilePlus,
+	Verified,
+} from '@tamagui/lucide-icons';
 import { Redirect, useRouter } from 'expo-router';
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 import {
 	Avatar,
 	Card,
@@ -26,7 +32,6 @@ export default function Account() {
 	const username = user?.username ?? '';
 	const imageUrl = user?.imageUrl ?? '';
 	const verified = user?.publicMetadata.verified;
-	const plus = user?.publicMetadata.plus;
 
 	const onSignOutPress = React.useCallback(() => {
 		if (!isLoaded) {
@@ -67,7 +72,6 @@ export default function Account() {
 										<XStack alignItems="center" space="$2">
 											<H2>{username}</H2>
 											{verified && <Verified color="$blue10" />}
-											{plus && <SmilePlus color="$yellow10" />}
 										</XStack>
 										<Paragraph theme="alt2">{emailAddress}</Paragraph>
 									</YStack>
@@ -75,9 +79,25 @@ export default function Account() {
 							</Card.Header>
 							<Card.Footer padded>
 								<XStack space="$2" justifyContent="flex-end">
-									<Button theme="active" onPress={() => {}} icon={Gift}>
-										Redeem Code
-									</Button>
+									{Platform.OS === 'web' ? (
+										<Button
+											icon={SmilePlus}
+											onPress={() => {
+												if (navigator.share) {
+													navigator.share({
+														title: 'Join Syleno!',
+														text: 'Try this awesome app!',
+														url: 'https://syleno.genr234.com',
+													});
+												} else {
+													alert('Web Share API not supported');
+												}
+											}}>
+											Send Invite Link
+										</Button>
+									) : (
+										<></>
+									)}
 									<AlertDialog native>
 										<AlertDialog.Trigger asChild>
 											<Button icon={LogOut} themeInverse>

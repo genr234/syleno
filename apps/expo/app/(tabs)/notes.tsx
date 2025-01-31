@@ -1,4 +1,4 @@
-import { Plus } from '@tamagui/lucide-icons';
+import { Construction, Plus } from '@tamagui/lucide-icons';
 import { router } from 'expo-router';
 import React from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
@@ -11,16 +11,13 @@ export default function Games() {
 			<YStack alignItems="center" gap="$0">
 				<Spacer />
 				<H1>Notes</H1>
-				<Spacer />
-				<Button
-					width={'95%'}
-					height={'$7'}
-					fontSize={'$5'}
-					themeInverse
-					icon={Plus}
-					onPress={() => router.navigate('/(editor)/note')}>
-					Create New Note
-				</Button>
+				<Spacer paddingBottom="$20" />
+				<YStack alignItems="center" justifyContent="center" gap="$2">
+					<Construction size={64} fontWeight={600} color={'$gray10Light'} />
+					<Paragraph fontWeight={600} color={'$gray10Light'}>
+						Work in progress
+					</Paragraph>
+				</YStack>
 			</YStack>
 		</View>
 	);

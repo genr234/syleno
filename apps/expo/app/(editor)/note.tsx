@@ -22,15 +22,19 @@ export default function Games() {
 		<View style={styles.container}>
 			<Button
 				icon={<ArrowLeft />}
+				themeInverse
 				onPress={() => router.navigate('/notes')}
-				style={{ position: 'absolute', top: 40, left: 10, zIndex: 1 }}
 			/>
 			<H1>{}</H1>
 			<YStack alignItems="center" gap={'$4'}>
 				<Spacer />
-				<H3>Title</H3>
-				<Input width="100%" value={title} onChangeText={setTitle} />
-				<H3>Content</H3>
+				<Input
+					width="100%"
+					value={title}
+					onChangeText={setTitle}
+					textAlign="center"
+					placeholder="Title"
+				/>
 				<TextArea
 					width="100%"
 					rows={15}

@@ -8,7 +8,6 @@ import appConfig from '@/tamagui.config';
 
 import { ClerkLoaded, ClerkProvider } from '@clerk/clerk-expo';
 import * as SecureStore from 'expo-secure-store';
-import AppContainer from '@/components/AppContainer';
 
 const tokenCache = {
 	async getToken(key: string) {
@@ -48,7 +47,7 @@ export default function RootLayout() {
 		if (loaded) {
 			SplashScreen.hideAsync();
 		}
-	}, [loaded]);
+	}, []);
 
 	if (!loaded) {
 		return null;

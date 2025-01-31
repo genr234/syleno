@@ -5,6 +5,7 @@ export default function GamesProviderLayout() {
 		<Stack>
 			<Stack.Screen name="coolmathgames" options={{ headerShown: false }} />
 			<Stack.Screen name="web" options={{ headerShown: false }} />
+			<Stack.Screen name="emujs" options={{ headerShown: false }} />
 		</Stack>
 	);
 }

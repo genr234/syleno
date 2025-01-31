@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
 	View,
 	StyleSheet,
@@ -7,17 +7,26 @@ import {
 	Dimensions,
 	TouchableOpacity,
 	Alert,
+	Animated,
+	PanResponder,
 } from 'react-native';
-import { H1, Paragraph, YStack, Button, Text, Spacer } from 'tamagui';
-import { ChevronLeft } from '@tamagui/lucide-icons';
+import {
+	H1,
+	Paragraph,
+	YStack,
+	Button,
+	Text,
+	Spacer,
+	Dialog,
+	Unspaced,
+} from 'tamagui';
+import { ChevronLeft, X } from '@tamagui/lucide-icons';
 import { WebView } from 'react-native-webview';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const getOrientation = () => {
-	const { width, height } = Dimensions.get('window');
-	return width > height ? 'landscape' : 'portrait';
-};
+const LONG_PRESS_DURATION = 500; // Duration in ms to trigger long press
+const DRAG_THRESHOLD = 5; // Minimum distance to consider as drag
 
 const styles = StyleSheet.create({
 	container: {
@@ -43,20 +52,93 @@ const styles = StyleSheet.create({
 	},
 	backButton: {
 		position: 'absolute',
-		top: 40,
-		left: 10,
 		backgroundColor: 'rgba(0,0,0,0.5)',
-		borderRadius: 20,
-		padding: 10,
+		borderRadius: 25,
+		padding: 12,
 		zIndex: 10,
+		elevation: 5,
+		shadowColor: '#000',
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.25,
+		shadowRadius: 3.84,
+	},
+	backButtonPressed: {
+		backgroundColor: 'rgba(0,0,0,0.7)',
+		transform: [{ scale: 0.95 }],
 	},
 });
+
+const getOrientation = () => {
+	const { width, height } = Dimensions.get('window');
+	return width > height ? 'landscape' : 'portrait';
+};
 
 export default function CoolMathGame() {
 	const params = useLocalSearchParams();
 	const [orientation, setOrientation] = useState(getOrientation());
 	const [id, setId] = useState();
+	const [backDialogOpen, setBackDialogOpen] = useState(false);
+	const [isButtonPressed, setIsButtonPressed] = useState(false);
 	const router = useRouter();
+
+	// Animation and gesture state
+	const pan = useRef(new Animated.ValueXY()).current;
+	const pressStartTime = useRef(0);
+	const pressStartLocation = useRef({ x: 0, y: 0 });
+	const isDragging = useRef(false);
+
+	const panResponder = useRef(
+		PanResponder.create({
+			onStartShouldSetPanResponder: () => true,
+			onMoveShouldSetPanResponder: (_, gestureState) => {
+				const distance = Math.sqrt(
+					Math.pow(gestureState.dx, 2) + Math.pow(gestureState.dy, 2),
+				);
+				return distance > DRAG_THRESHOLD;
+			},
+			onPanResponderGrant: (event) => {
+				pressStartTime.current = Date.now();
+				pressStartLocation.current = {
+					x: event.nativeEvent.locationX,
+					y: event.nativeEvent.locationY,
+				};
+				pan.setOffset({
+					x: pan.x._value,
+					y: pan.y._value,
+				});
+				setIsButtonPressed(true);
+			},
+			onPanResponderMove: (_, gestureState) => {
+				isDragging.current = true;
+				Animated.event([null, { dx: pan.x, dy: pan.y }], {
+					useNativeDriver: false,
+				})(_, gestureState);
+			},
+			onPanResponderRelease: (_, gestureState) => {
+				pan.flattenOffset();
+				setIsButtonPressed(false);
+
+				const pressDuration = Date.now() - pressStartTime.current;
+				const distance = Math.sqrt(
+					Math.pow(gestureState.dx, 2) + Math.pow(gestureState.dy, 2),
+				);
+
+				// Only trigger dialog if it was a tap (not a drag)
+				if (distance < DRAG_THRESHOLD && pressDuration < LONG_PRESS_DURATION) {
+					setBackDialogOpen(true);
+				}
+
+				// Reset dragging state after a short delay
+				setTimeout(() => {
+					isDragging.current = false;
+				}, 100);
+			},
+			onPanResponderTerminate: () => {
+				setIsButtonPressed(false);
+				isDragging.current = false;
+			},
+		}),
+	).current;
 
 	useEffect(() => {
 		const updateOrientation = () => {
@@ -173,12 +255,74 @@ export default function CoolMathGame() {
 			/>
 		);
 	};
-
 	return (
 		<View style={styles.container}>
-			<TouchableOpacity style={styles.backButton} onPress={handleBack}>
+			<Dialog modal open={backDialogOpen}>
+				<Dialog.Portal>
+					<Dialog.Content
+						bordered
+						elevate
+						key="content"
+						animateOnly={['transform', 'opacity']}
+						animation={[
+							'quicker',
+							{
+								opacity: {
+									overshootClamping: true,
+								},
+							},
+						]}
+						enterStyle={{ x: 0, y: -20, opacity: 0, scale: 0.9 }}
+						exitStyle={{ x: 0, y: 10, opacity: 0, scale: 0.95 }}
+						gap="$4">
+						<Dialog.Title>Exit Game</Dialog.Title>
+						<Dialog.Description>
+							Are you sure you want to exit?
+						</Dialog.Description>
+						<Button
+							onPress={() => {
+								handleBack();
+								setBackDialogOpen(false);
+							}}>
+							Exit
+						</Button>
+						<Dialog.Close displayWhenAdapted asChild>
+							<Button
+								theme="active"
+								themeInverse
+								aria-label="Close"
+								onPress={() => setBackDialogOpen(false)}>
+								Cancel
+							</Button>
+						</Dialog.Close>
+						<Unspaced>
+							<Dialog.Close asChild>
+								<Button
+									position="absolute"
+									top="$3"
+									right="$3"
+									size="$2"
+									circular
+									icon={X}
+									onPress={() => setBackDialogOpen(false)}
+								/>
+							</Dialog.Close>
+						</Unspaced>
+					</Dialog.Content>
+				</Dialog.Portal>
+			</Dialog>
+
+			<Animated.View
+				style={[
+					styles.backButton,
+					isButtonPressed && styles.backButtonPressed,
+					{
+						transform: [{ translateX: pan.x }, { translateY: pan.y }],
+					},
+				]}
+				{...panResponder.panHandlers}>
 				<ChevronLeft size={24} color="white" />
-			</TouchableOpacity>
+			</Animated.View>
 			{renderContent()}
 		</View>
 	);
