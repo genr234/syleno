@@ -3,7 +3,7 @@
 </p>
 <h1 align="center">Syleno</h1>
 <p align="center">
-    <a href="https://syleno.genr234.com">
+    <a href="https://syleno.expo.app">
         <img src="https://icons.hackclub.com/api/icons/hackclub-smoke/web" alt="Website" width="52" height="52">
     </a>
 </a>
